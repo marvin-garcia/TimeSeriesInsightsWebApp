@@ -1,0 +1,17 @@
+﻿@{
+    ViewData["Title"] = "Time Series Insights Data App";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Time Series Insights Data App</h1>
+    <p>
+        To display Time Series Insights data, just append to the base URL the following route:<br /><br />
+        /timeseriesdata?sensortype=sensortype&since=since&dataformat=dataformat&ignoreNull?=ignoreNull
+        <br />
+        <br />
+        <b>sensorType</b> hvac, temp, lighting, occupancy<br />
+        <b>since</b>: only return logs since this time, as a duration: 1h, 20m, 2h30m<br />
+        <b>dataFormat</b> overlapped, separate<br />
+        <b>ignoreNull</b>: whether to ignore null data points from incoming data<br />
+    </p>
+</div>
