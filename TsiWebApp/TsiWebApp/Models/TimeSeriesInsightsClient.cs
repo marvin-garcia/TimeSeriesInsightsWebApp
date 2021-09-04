@@ -16,6 +16,7 @@ namespace TsiWebApp.Models
 {
     public interface ITimeSeriesInsightsClient
     {
+        Task InitializeAsync();
         TimeSeriesInsightsRequest GetRequest(string sensorType, string since);
         Task<List<Dictionary<string, Dictionary<string, Dictionary<string, Dictionary<string, object>>>>>> GetEventsAsync(TimeSeriesInsightsRequest timeSeriesInsightsRequest, TimeSeriesInsightsClient.DataFormat dataFormat, bool ignoreNull = false);
     }
@@ -55,25 +56,23 @@ namespace TsiWebApp.Models
             _aadLoginUrl = configuration["AAD_LOGIN_URL"];
             _tenantId = configuration["TENANT_ID"];
             _environmentFqdn = configuration["TSI_ENV_FQDN"];
-
-            this.InitializeAsync().Wait();
         }
 
         /// <summary>
         /// Initialize client, authenticates with Azure Active Directory using service principal credentials
         /// </summary>
         /// <returns></returns>
-        private async Task InitializeAsync()
+        public async Task InitializeAsync()
         {
             try
             {
-                AuthenticationContext context = new AuthenticationContext($"{_aadLoginUrl}/{_tenantId}", TokenCache.DefaultShared);
+                AuthenticationContext context = new AuthenticationContext($"{new Uri(_aadLoginUrl)}/{_tenantId}", TokenCache.DefaultShared);
                 AuthenticationResult authenticationResult = await context.AcquireTokenAsync(_resourceUri, new ClientCredential(_clientId, _clientSecret));
 
                 TokenCloudCredentials tokenCloudCredentials = new TokenCloudCredentials(authenticationResult.AccessToken);
                 ServiceClientCredentials serviceClientCredentials = new TokenCredentials(tokenCloudCredentials.Token);
 
-                this.Client = new Microsoft.Azure.TimeSeriesInsights.TimeSeriesInsightsClient(credentials: serviceClientCredentials, this.HttpClient, false)
+                this.Client = new Microsoft.Azure.TimeSeriesInsights.TimeSeriesInsightsClient(credentials: serviceClientCredentials)
                 {
                     EnvironmentFqdn = _environmentFqdn,
                 };

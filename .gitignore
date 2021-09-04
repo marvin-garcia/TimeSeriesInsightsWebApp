@@ -389,3 +389,4 @@ FodyWeavers.xsd
 
 **/appsettings.json
 **/appsettings.Development.json
+/TsiWebApp/TsiWebApp/.config/dotnet-tools.json

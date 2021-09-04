@@ -24,7 +24,7 @@
                 // render the data in a chart
                 var tsiClient = new TsiClient();
                 var lineChart = new tsiClient.ux.LineChart(document.getElementById('chart1'));
-                lineChart.render(data, {theme: 'light'});
+                lineChart.render(data, {theme: 'light', interpolationFunction: 'curveLinear'});
             };
         </script>
     </body>

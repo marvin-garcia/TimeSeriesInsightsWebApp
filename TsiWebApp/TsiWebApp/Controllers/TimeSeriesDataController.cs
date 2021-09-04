@@ -42,6 +42,7 @@ namespace TsiWebApp.Controllers
         {
             try
             {
+                await this._tsiClient.InitializeAsync();
                 var timeSeriesInsightsRequest = this._tsiClient.GetRequest(sensorType, since);
                 var data = await this._tsiClient.GetEventsAsync(timeSeriesInsightsRequest, dataFormat, ignoreNull);
 
@@ -70,6 +71,7 @@ namespace TsiWebApp.Controllers
         {
             try
             {
+                await this._tsiClient.InitializeAsync();
                 var data = await this._tsiClient.GetEventsAsync(timeSeriesInsightsRequest, dataFormat, ignoreNull);
 
                 ViewData["Data"] = JsonConvert.SerializeObject(data);
