@@ -1,6 +1,8 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using TsiWebApp.Models;
 
@@ -8,19 +10,23 @@ namespace TsiWebApp.Controllers
 {
     public class TimeSeriesDataController : Controller
     {
-        private readonly TimeSeriesInsightsClient _tsiClient;
-        public TimeSeriesDataController(IConfiguration configuration) 
+        private readonly ITimeSeriesInsightsClient _tsiClient;
+        private readonly ILogger<TimeSeriesDataController> _logger;
+
+        public TimeSeriesDataController(ITimeSeriesInsightsClient timeSeriesInsightsClient, ILogger<TimeSeriesDataController> logger) 
         {
-            string resourceUri = configuration["RESOURCE_URI"];
-            string clientId = configuration["CLIENT_ID"];
-            string clientSecret = configuration["CLIENT_SECRET"];
-            string aadLoginUrl = configuration["AAD_LOGIN_URL"];
-            string tenantId = configuration["TENANT_ID"];
-            string environmentFqdn = configuration["TSI_ENV_FQDN"];
+            this._logger = logger;
 
+            //string resourceUri = configuration["RESOURCE_URI"];
+            //string clientId = configuration["CLIENT_ID"];
+            //string clientSecret = configuration["CLIENT_SECRET"];
+            //string aadLoginUrl = configuration["AAD_LOGIN_URL"];
+            //string tenantId = configuration["TENANT_ID"];
+            //string environmentFqdn = configuration["TSI_ENV_FQDN"];
+            //this._tsiClient = new TimeSeriesInsightsClient(resourceUri, clientId, clientSecret, aadLoginUrl, tenantId, environmentFqdn);
 
-            this._tsiClient = new TimeSeriesInsightsClient(resourceUri, clientId, clientSecret, aadLoginUrl, tenantId, environmentFqdn);
-            this._tsiClient.InitializeAsync().Wait();
+            this._tsiClient = timeSeriesInsightsClient;
+            //this._tsiClient.InitializeAsync().Wait();
         }
 
         /// <summary>
@@ -34,13 +40,22 @@ namespace TsiWebApp.Controllers
         [HttpGet]
         public async Task<IActionResult> Index(string sensorType, string since, TimeSeriesInsightsClient.DataFormat dataFormat, bool ignoreNull = false)
         {
-            var timeSeriesInsightsRequest = this._tsiClient.GetRequest(sensorType, since);
-            var data = await this._tsiClient.GetEventsAsync(timeSeriesInsightsRequest, dataFormat, ignoreNull);
+            try
+            {
+                var timeSeriesInsightsRequest = this._tsiClient.GetRequest(sensorType, since);
+                var data = await this._tsiClient.GetEventsAsync(timeSeriesInsightsRequest, dataFormat, ignoreNull);
 
-            string serializedData = JsonConvert.SerializeObject(data);
-            ViewData["Data"] = serializedData;
+                string serializedData = JsonConvert.SerializeObject(data);
+                ViewData["Data"] = serializedData;
 
-            return View();
+                return View();
+            }
+            catch (Exception e)
+            {
+                ViewData["Error"] = e.ToString();
+                this._logger.LogError(e.ToString());
+                return View("Error");
+            }
         }
 
         /// <summary>
@@ -53,10 +68,19 @@ namespace TsiWebApp.Controllers
         [HttpPost]
         public async Task<IActionResult> Index([FromBody] TimeSeriesInsightsRequest timeSeriesInsightsRequest, TimeSeriesInsightsClient.DataFormat dataFormat, bool ignoreNull = false)
         {
-            var data = await this._tsiClient.GetEventsAsync(timeSeriesInsightsRequest, dataFormat, ignoreNull);
+            try
+            {
+                var data = await this._tsiClient.GetEventsAsync(timeSeriesInsightsRequest, dataFormat, ignoreNull);
 
-            ViewData["Data"] = JsonConvert.SerializeObject(data);
-            return View();
+                ViewData["Data"] = JsonConvert.SerializeObject(data);
+                return View();
+            }
+            catch (Exception e)
+            {
+                ViewData["Error"] = e.ToString();
+                this._logger.LogError(e.ToString());
+                return View("Error");
+            }
         }
     }
 }

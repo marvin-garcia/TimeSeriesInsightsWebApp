@@ -20,6 +20,7 @@ namespace TsiWebApp.Controllers
 
         public IActionResult Index()
         {
+            ViewData["BaseUrl"] = $"{this.Request.Scheme}://{this.Request.Host}{this.Request.PathBase}";
             return View();
         }
 

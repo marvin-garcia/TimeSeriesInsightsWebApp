@@ -2,9 +2,12 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
+    <ApplicationInsightsResourceId>/subscriptions/f0cf2edb-86a7-44b6-9c02-9c5fee5c618d/resourceGroups/unreal-adt-app/providers/microsoft.insights/components/tsiwebapp</ApplicationInsightsResourceId>
+    <UserSecretsId>32fc1485-c2ae-44e9-b86f-13cdeb94e0cb</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.18.0" />
     <PackageReference Include="Microsoft.Azure.Common" Version="2.2.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="3.1.18" />
     <PackageReference Include="Microsoft.IdentityModel" Version="7.0.0" />
