@@ -38,7 +38,7 @@ namespace TsiWebApp.Controllers
         /// <param name="ignoreNull">Whether to ignore null data points</param>
         /// <returns></returns>
         [HttpGet]
-        public async Task<IActionResult> Index(string sensorType, string since, TimeSeriesInsightsClient.DataFormat dataFormat, bool ignoreNull = false)
+        public async Task<IActionResult> Index(string sensorType, string since, TimeSeriesInsightsClient.DataFormat dataFormat, bool ignoreNull = true)
         {
             try
             {
@@ -67,7 +67,7 @@ namespace TsiWebApp.Controllers
         /// <param name="ignoreNull">Whether to ignore null data points</param>
         /// <returns></returns>
         [HttpPost]
-        public async Task<IActionResult> Index([FromBody] TimeSeriesInsightsRequest timeSeriesInsightsRequest, TimeSeriesInsightsClient.DataFormat dataFormat, bool ignoreNull = false)
+        public async Task<IActionResult> Index([FromBody] TimeSeriesInsightsRequest timeSeriesInsightsRequest, TimeSeriesInsightsClient.DataFormat dataFormat, bool ignoreNull = true)
         {
             try
             {
