@@ -44,9 +44,9 @@
                 var lineChart = new tsiClient.ux.LineChart(document.getElementById('chart1'));
                 var lineChartOptions = {
                     theme: 'dark',
-                    legend: 'shown',
+                    legend: 'compact',
                     yAxisState: '@ViewData["yAxisState"]',
-                    interpolationFunction: 'curveLinear'
+                    interpolationFunction: ''
                 };
                 lineChart.render(transformedData, lineChartOptions, tsqExpressions);
             };
