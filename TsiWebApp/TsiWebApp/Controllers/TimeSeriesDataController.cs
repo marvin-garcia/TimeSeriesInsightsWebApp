@@ -32,7 +32,7 @@ namespace TsiWebApp.Controllers
         /// <param name="ignoreNull">Whether to ignore null data points</param>
         /// <returns></returns>
         [HttpGet]
-        public async Task<IActionResult> Index(SensorType sensorType, string since, string interval, YAxisState yAxis = YAxisState.overlap)
+        public async Task<IActionResult> Index(SensorType sensorType, string since, string interval, YAxisState yAxis = YAxisState.shared)
         {
             try
             {
