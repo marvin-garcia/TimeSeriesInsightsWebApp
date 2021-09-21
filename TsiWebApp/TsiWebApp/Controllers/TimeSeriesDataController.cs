@@ -1,32 +1,26 @@
 ﻿using System;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using TsiWebApp.Models;
+using static TsiWebApp.Models.TimeSeriesInsightsClient;
+using System.Linq;
 
 namespace TsiWebApp.Controllers
 {
     public class TimeSeriesDataController : Controller
     {
+        private readonly int _sensorCount;
         private readonly ITimeSeriesInsightsClient _tsiClient;
         private readonly ILogger<TimeSeriesDataController> _logger;
 
         public TimeSeriesDataController(ITimeSeriesInsightsClient timeSeriesInsightsClient, ILogger<TimeSeriesDataController> logger) 
         {
             this._logger = logger;
-
-            //string resourceUri = configuration["RESOURCE_URI"];
-            //string clientId = configuration["CLIENT_ID"];
-            //string clientSecret = configuration["CLIENT_SECRET"];
-            //string aadLoginUrl = configuration["AAD_LOGIN_URL"];
-            //string tenantId = configuration["TENANT_ID"];
-            //string environmentFqdn = configuration["TSI_ENV_FQDN"];
-            //this._tsiClient = new TimeSeriesInsightsClient(resourceUri, clientId, clientSecret, aadLoginUrl, tenantId, environmentFqdn);
-
+            this._sensorCount = 4;
             this._tsiClient = timeSeriesInsightsClient;
-            //this._tsiClient.InitializeAsync().Wait();
         }
 
         /// <summary>
@@ -38,16 +32,27 @@ namespace TsiWebApp.Controllers
         /// <param name="ignoreNull">Whether to ignore null data points</param>
         /// <returns></returns>
         [HttpGet]
-        public async Task<IActionResult> Index(string sensorType, string since, TimeSeriesInsightsClient.DataFormat dataFormat, bool ignoreNull = true)
+        public async Task<IActionResult> Index(SensorType sensorType, string since, string interval)
         {
             try
             {
                 await this._tsiClient.InitializeAsync();
-                var timeSeriesInsightsRequest = this._tsiClient.GetRequest(sensorType, since);
-                var data = await this._tsiClient.GetEventsAsync(timeSeriesInsightsRequest, dataFormat, ignoreNull);
+                var timeSeriesIds = TimeSeriesInsightsClient.GetSensorArray(sensorType, 1, _sensorCount);
+                var eventProperty = TimeSeriesInsightsClient.GetEventProperty(sensorType);
+                var searchSpan = TimeSeriesInsightsClient.GetTimeRange(since);
+                var timeInterval = TimeSeriesInsightsClient.GetTimeInterval(interval);
+                var aggregateSeries = this._tsiClient.GetAggregateSeriesAsync(timeSeriesIds, searchSpan, timeInterval, eventProperty);
+                string serializedData = JsonConvert.SerializeObject(aggregateSeries);
 
-                string serializedData = JsonConvert.SerializeObject(data);
+                ViewData["TimeSeriesId"] = JsonConvert.SerializeObject(timeSeriesIds);
                 ViewData["Data"] = serializedData;
+                ViewData["From"] = searchSpan.FromProperty.ToString("yyyy-MM-ddThh:mm:ss.fffZ");
+                ViewData["To"] = searchSpan.To.ToString("yyyy-MM-ddThh:mm:ss.fffZ");
+                ViewData["BucketSize"] = interval;
+                ViewData["VariableType"] = "numeric";
+                ViewData["VariableName"] = eventProperty.Name;
+                ViewData["VariableValue"] = $"$event.{eventProperty.Name}.{eventProperty.Type}";
+                ViewData["VariableAggregation"] = "avg($value)";
 
                 return View();
             }
@@ -60,29 +65,15 @@ namespace TsiWebApp.Controllers
         }
 
         /// <summary>
-        /// Return TSI data
+        /// List available sensor types
         /// </summary>
-        /// <param name="timeSeriesInsightsRequest">Time series insights request. See https://docs.microsoft.com/en-us/rest/api/time-series-insights/dataaccessgen2/query/execute#getevents for more details on how to create the payload</param>
-        /// <param name="dataFormat">How to display all the data streams: overlapped, separate</param>
-        /// <param name="ignoreNull">Whether to ignore null data points</param>
         /// <returns></returns>
-        [HttpPost]
-        public async Task<IActionResult> Index([FromBody] TimeSeriesInsightsRequest timeSeriesInsightsRequest, TimeSeriesInsightsClient.DataFormat dataFormat, bool ignoreNull = true)
+        [HttpGet]
+        public IActionResult GetSensorTypes()
         {
-            try
-            {
-                await this._tsiClient.InitializeAsync();
-                var data = await this._tsiClient.GetEventsAsync(timeSeriesInsightsRequest, dataFormat, ignoreNull);
+            string[] sensorTypes = Enum.GetValues(typeof(SensorType)).Cast<string>().ToArray();
 
-                ViewData["Data"] = JsonConvert.SerializeObject(data);
-                return View();
-            }
-            catch (Exception e)
-            {
-                ViewData["Error"] = e.ToString();
-                this._logger.LogError(e.ToString());
-                return View("Error");
-            }
+            return new OkObjectResult(sensorTypes);
         }
     }
 }

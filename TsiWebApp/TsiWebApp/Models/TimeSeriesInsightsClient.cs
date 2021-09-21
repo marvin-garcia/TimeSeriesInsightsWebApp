@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -10,15 +11,17 @@ using Microsoft.Azure.TimeSeriesInsights.Models;
 using Microsoft.IdentityModel.Clients.ActiveDirectory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
-using System.Net.Http;
 
 namespace TsiWebApp.Models
 {
     public interface ITimeSeriesInsightsClient
     {
         Task InitializeAsync();
-        TimeSeriesInsightsRequest GetRequest(string sensorType, string since);
-        Task<List<Dictionary<string, Dictionary<string, Dictionary<string, Dictionary<string, object>>>>>> GetEventsAsync(TimeSeriesInsightsRequest timeSeriesInsightsRequest, TimeSeriesInsightsClient.DataFormat dataFormat, bool ignoreNull = false);
+        GetEvents GetEventsRequest(string timeSeriesId, DateTimeRange searchSpan, EventProperty eventProperty, bool ignoreNull = true);
+        AggregateSeries GetAggregateSeriesRequest(string timeSeriesId, DateTimeRange searchSpan, TimeSpan interval, EventProperty eventProperty, bool ignoreNull = true);
+        Task<List<QueryResultPage>> GetEventsAsync(GetEvents getEventsRequest);
+        Task<List<QueryResultPage>> GetAggregateSeriesAsync(AggregateSeries aggregateSeries);
+        Task<List<QueryResultPage>> GetAggregateSeriesAsync(string[] timeSeriesIds, DateTimeRange searchSpan, TimeSpan interval, EventProperty eventProperty);
     }
 
     public class TimeSeriesInsightsClient : ITimeSeriesInsightsClient
@@ -85,94 +88,41 @@ namespace TsiWebApp.Models
         }
 
         /// <summary>
-        /// Formulates data request given sensorType and since parameters
+        /// Enum to categorize available sensor types
         /// </summary>
-        /// <param name="sensorType">Sensor type: hvac, temp, lighting, occupancy</param>
-        /// <param name="since">Only return logs since this time, as a duration: 1h, 20m, 2h30m</param>
-        /// <returns></returns>
-        public TimeSeriesInsightsRequest GetRequest(string sensorType, string since)
+        public enum SensorType
         {
-            try
-            {
-                var timeSeriesRequest = new TimeSeriesInsightsRequest()
-                {
-                    TimeSeriesId = Enumerable.Range(1, 4).Select(x => { return $"{sensorType.ToLower()}sensor{x}"; }).ToArray(),
-                    Since = since,
-                    Properties = new Property[]
-                    {
-                    new Property()
-                    {
-                        Name = sensorType switch
-                        {
-                            "hvac" => "airflow",
-                            "lighting" => "State",
-                            "temp" => "temperature",
-                            "occupancy" => "IsOccupied",
-                            _ => throw new Exception($"sensor type '{sensorType}' is not defined"),
-                        },
-                        Type = sensorType switch
-                        {
-                            "hvac" => "Long",
-                            "lighting" => "Long",
-                            "temp" => "Double",
-                            "occupancy" => "Long",
-                            _ => throw new Exception($"sensor type '{sensorType}' is not defined"),
-                        }
-                    }
-                    }
-                };
-
-                return timeSeriesRequest;
-            }
-            catch (Exception e)
-            {
-                this._logger.LogError(e.ToString());
-                throw e;
-            }
+            hvac,
+            lighting,
+            temp,
+            occupancy,
         }
 
         /// <summary>
-        /// Gets event data from TSI and formats it to pass it to the Javascript SDK
+        /// Get sensor array
         /// </summary>
-        /// <param name="timeSeriesInsightsRequest"></param>
-        /// <param name="dataFormat"></param>
-        /// <param name="ignoreNull"></param>
+        /// <param name="sensorType"></param>
+        /// <param name="sensorIndexStart"></param>
+        /// <param name="sensorCount"></param>
         /// <returns></returns>
-        public async Task<List<Dictionary<string, Dictionary<string, Dictionary<string, Dictionary<string, object>>>>>> GetEventsAsync(TimeSeriesInsightsRequest timeSeriesInsightsRequest, DataFormat dataFormat, bool ignoreNull = false)
+        public static string[] GetSensorArray(SensorType sensorType, int sensorIndexStart = 1, int sensorCount = 4)
         {
-            try
-            {
-                var timeSeriesInsightsResults = await this.GetEventsAsync(timeSeriesInsightsRequest);
-
-
-                var data = new List<Dictionary<string, Dictionary<string, Dictionary<string, Dictionary<string, object>>>>>();
-
-                if (dataFormat == DataFormat.Overlapped)
-                    data = this.ConvertToOverlappedSensorData(timeSeriesInsightsResults, ignoreNull);
-                else if (dataFormat == DataFormat.Separate)
-                    data = this.ConvertToSeparateSensorData(timeSeriesInsightsResults, ignoreNull);
-
-                return data;
-            }
-            catch (Exception e)
-            {
-                this._logger.LogError(e.ToString());
-                throw e;
-            }
+            string[] sensorArray = Enumerable.Range(sensorIndexStart, sensorCount).Select(x => { return $"{sensorType}sensor{x}"; }).ToArray();
+            return sensorArray;
         }
 
         /// <summary>
-        /// Gets raw data from TSI
+        /// Convert time range
         /// </summary>
-        /// <param name="request"></param>
+        /// <param name="since">time range as a duration</param>
         /// <returns></returns>
-        private async Task<List<TimeSeriesInsightsResult>> GetEventsAsync(TimeSeriesInsightsRequest request)
+        public static DateTimeRange GetTimeRange(string since)
         {
             try
             {
                 DateTime to = DateTime.UtcNow;
                 DateTime from = to;
-                Match match = Regex.Match(request.Since, @"((\d+?)h)?((\d+?)m)?((\d+?)s)?");
+                Match match = Regex.Match(since, @"((\d+?)h)?((\d+?)m)?((\d+?)s)?");
 
                 if (!string.IsNullOrEmpty(match.Groups[2].Value))
                     from = from.AddHours(-1 * Convert.ToInt32(match.Groups[2].Value));
@@ -183,39 +133,114 @@ namespace TsiWebApp.Models
                 if (!string.IsNullOrEmpty(match.Groups[6].Value))
                     from = from.AddSeconds(-1 * Convert.ToInt32(match.Groups[6].Value));
 
-                List<TimeSeriesInsightsResult> timeSeriesInsightsResults = new List<TimeSeriesInsightsResult>();
-                foreach (var id in request.TimeSeriesId)
+                var dateTimeRange = new DateTimeRange()
                 {
-                    List<QueryResultPage> queryResultPages = new List<QueryResultPage>() { };
-                    QueryRequest queryRequest = new QueryRequest(
-                        getEvents: new GetEvents(
-                            timeSeriesId: new string[] { id }, // have to query each time series id at a time because if ids and timestamps don't match, API returns an error
-                            searchSpan: new DateTimeRange()
-                            {
-                                FromProperty = from,
-                                To = to,
-                            },
-                            projectedProperties: request.Properties.Select(x => { return new EventProperty(x.Name, x.Type); }).ToArray(),
-                            filter: null));
+                    FromProperty = from,
+                    To = to,
+                };
 
-                    string continuationToken;
-                    do
-                    {
-                        QueryResultPage queryResponse = await this.Client.Query.ExecuteAsync(queryRequest);
-                        queryResultPages.Add(queryResponse);
+                return dateTimeRange;
+            }
+            catch (Exception e)
+            {
+                throw e;
+            }
+        }
 
-                        continuationToken = queryResponse.ContinuationToken;
-                    }
-                    while (continuationToken != null);
+        /// <summary>
+        /// Get time interval from interval expressions like PT?[DHMS]
+        /// </summary>
+        /// <param name="interval">interval expression</param>
+        /// <returns></returns>
+        public static TimeSpan GetTimeInterval(string interval)
+        {
+            try
+            {
+                Match match = Regex.Match(interval.ToUpper(), @"PT(\d+)([DHMS])");
 
-                    timeSeriesInsightsResults.Add(new TimeSeriesInsightsResult()
-                    {
-                        TimeSeriesId = id,
-                        QueryResultPages = queryResultPages,
-                    });
-                }
+                int intervalFactor = match.Groups[2].Value switch
+                {
+                    "s" => 1,
+                    "m" => 60,
+                    "h" => 60 * 60,
+                    "d" => 60 * 60 * 24,
+                    _ => throw new Exception($"Time interval {interval} cannot be parsed"),
+                };
 
-                return timeSeriesInsightsResults;
+                int totalSeconds = Convert.ToInt32(match.Groups[1].Value) * intervalFactor;
+
+                return new TimeSpan(0, 0, totalSeconds);
+            }
+            catch (Exception e)
+            {
+                throw e;
+            }
+
+        }
+
+        /// <summary>
+        /// Create event property object based on sensor type
+        /// </summary>
+        /// <param name="sensorType"></param>
+        /// <returns></returns>
+        public static EventProperty GetEventProperty(SensorType sensorType)
+        {
+            var eventProperty = new EventProperty(
+                sensorType switch
+                {
+                    SensorType.hvac => "airflow",
+                    SensorType.lighting => "State",
+                    SensorType.temp => "temperature",
+                    SensorType.occupancy => "IsOccupied",
+                    _ => throw new Exception($"sensor type '{sensorType}' is not defined"),
+                },
+                sensorType switch
+                {
+                    SensorType.hvac => "Long",
+                    SensorType.lighting => "Long",
+                    SensorType.temp => "Double",
+                    SensorType.occupancy => "Long",
+                    _ => throw new Exception($"sensor type '{sensorType}' is not defined"),
+                });
+
+            return eventProperty;
+        }
+
+        /// <summary>
+        /// Creates event request object based on input parameters
+        /// </summary>
+        /// <param name="sensorType"></param>
+        /// <param name="timeSeriesId"></param>
+        /// <param name="searchSpan"></param>
+        /// <param name="ignoreNull"></param>
+        /// <returns></returns>
+        public GetEvents GetEventsRequest(string timeSeriesId, DateTimeRange searchSpan, EventProperty eventProperty, bool ignoreNull = true)
+        {
+            try
+            {
+                // timeSeriesId
+                var timeSeriesIds = new string[]
+                {
+                    timeSeriesId
+                };
+
+                // projectedProperties
+                var projectedProperties = new List<EventProperty>() { eventProperty };
+
+                // inlineVariables
+                var inlineVariables = new Dictionary<string, Variable>()
+                {
+                    { eventProperty.Type, new Variable(new Tsx($"event.{projectedProperties[0].Name}.{projectedProperties[0].Type}")) }
+                };
+
+                // filter
+                Tsx filter = null;
+                if (ignoreNull)
+                    filter = new Tsx($"$event.{projectedProperties[0].Name}.{projectedProperties[0].Type} != null");
+
+                var getEventsRequest = new GetEvents(timeSeriesIds, searchSpan, filter, projectedProperties);
+
+                return getEventsRequest;
             }
             catch (Exception e)
             {
@@ -225,49 +250,40 @@ namespace TsiWebApp.Models
         }
 
         /// <summary>
-        /// Converts raw TSI data to overlapped mode
+        /// Creates aggregates series request object based on input parameters
         /// </summary>
-        /// <param name="timeSeriesInsightsResults"></param>
+        /// <param name="sensorType"></param>
+        /// <param name="timeSeriesId"></param>
+        /// <param name="searchSpan"></param>
+        /// <param name="interval"></param>
         /// <param name="ignoreNull"></param>
         /// <returns></returns>
-        private List<Dictionary<string, Dictionary<string, Dictionary<string, Dictionary<string, object>>>>> ConvertToOverlappedSensorData(List<TimeSeriesInsightsResult> timeSeriesInsightsResults, bool ignoreNull = false)
+        public AggregateSeries GetAggregateSeriesRequest(string timeSeriesId, DateTimeRange searchSpan, TimeSpan interval, EventProperty eventProperty, bool ignoreNull = true)
         {
             try
             {
-                var dataGroup = new Dictionary<string, Dictionary<string, Dictionary<string, Dictionary<string, object>>>>();
-                var sensorData = new Dictionary<string, Dictionary<string, Dictionary<string, object>>>();
-                foreach (var timeSeriesInsightsResult in timeSeriesInsightsResults)
+                var timeSeriesIds = new string[]
                 {
-                    var timestampData = new Dictionary<string, Dictionary<string, object>>();
-                    for (int queryResultIndex = 0; queryResultIndex < timeSeriesInsightsResult.QueryResultPages.Count(); queryResultIndex++)
-                    {
-                        for (int timestampIndex = 0; timestampIndex < timeSeriesInsightsResult.QueryResultPages[queryResultIndex].Timestamps.Count(); timestampIndex++)
-                        {
-                            string timestamp = timeSeriesInsightsResult.QueryResultPages[queryResultIndex].Timestamps[timestampIndex].Value.ToString("yyyy-MM-ddThh:mm:ss.fffZ");
+                    timeSeriesId
+                };
 
-                            var propertyData = new Dictionary<string, object>();
-                            for (int propertyIndex = 0; propertyIndex < timeSeriesInsightsResult.QueryResultPages[queryResultIndex].Properties.Count(); propertyIndex++)
-                            {
-                                string propertyName = timeSeriesInsightsResult.QueryResultPages[queryResultIndex].Properties[propertyIndex].Name;
-                                object propertyValue = timeSeriesInsightsResult.QueryResultPages[queryResultIndex].Properties[propertyIndex].Values[timestampIndex];
+                var inlineVariables = new Dictionary<string, Variable>()
+                {
+                    { eventProperty.Name, new Variable(new Tsx($"event.{eventProperty.Name}.{eventProperty.Type}")) }
+                };
 
-                                if (propertyValue != null || !ignoreNull)
-                                    propertyData.Add(propertyName, propertyValue);
-                            }
+                var projectedVariables = new string[] 
+                {
+                    eventProperty.Name
+                };
 
-                            if (propertyData.Count() > 0)
-                                timestampData.Add(timestamp, propertyData);
-                        }
-                    }
+                Tsx filter = null;
+                if (ignoreNull)
+                    filter = new Tsx($"$event.{eventProperty.Name}.{eventProperty.Type} != null");
 
-                    sensorData.Add(timeSeriesInsightsResult.TimeSeriesId, timestampData);
-                }
+                var aggregateSeries = new AggregateSeries(timeSeriesIds, searchSpan, interval, filter, projectedVariables, inlineVariables);
 
-                dataGroup.Add("Sensors", sensorData);
-
-                var dataArray = new List<Dictionary<string, Dictionary<string, Dictionary<string, Dictionary<string, object>>>>>() { dataGroup };
-
-                return dataArray;
+                return aggregateSeries;
             }
             catch (Exception e)
             {
@@ -277,53 +293,92 @@ namespace TsiWebApp.Models
         }
 
         /// <summary>
-        /// Converts raw TSI data to separate mode
+        /// Gets raw event data from TSI
         /// </summary>
-        /// <param name="timeSeriesInsightsResults"></param>
-        /// <param name="ignoreNull"></param>
+        /// <param name="request"></param>
         /// <returns></returns>
-        private List<Dictionary<string, Dictionary<string, Dictionary<string, Dictionary<string, object>>>>> ConvertToSeparateSensorData(List<TimeSeriesInsightsResult> timeSeriesInsightsResults, bool ignoreNull = false)
+        public async Task<List<QueryResultPage>> GetEventsAsync(GetEvents getEventsRequest)
         {
             try
             {
-                var dataGroup = new Dictionary<string, Dictionary<string, Dictionary<string, Dictionary<string, object>>>>();
-                foreach (var timeSeriesInsightsResult in timeSeriesInsightsResults)
+                List<QueryResultPage> queryResultPages = new List<QueryResultPage>() { };
+                QueryRequest queryRequest = new QueryRequest(getEvents: getEventsRequest);
+
+                string continuationToken;
+                do
                 {
-                    var sensorData = new Dictionary<string, Dictionary<string, Dictionary<string, object>>>();
+                    QueryResultPage queryResponse = await this.Client.Query.ExecuteAsync(queryRequest);
+                    queryResultPages.Add(queryResponse);
 
-                    var timestampData = new Dictionary<string, Dictionary<string, object>>();
-                    for (int queryResultIndex = 0; queryResultIndex < timeSeriesInsightsResult.QueryResultPages.Count(); queryResultIndex++)
-                    {
-                        for (int timestampIndex = 0; timestampIndex < timeSeriesInsightsResult.QueryResultPages[queryResultIndex].Timestamps.Count(); timestampIndex++)
-                        {
-                            string timestamp = timeSeriesInsightsResult.QueryResultPages[queryResultIndex].Timestamps[timestampIndex].Value.ToString("yyyy-MM-ddThh:mm:ss.fffZ");
-
-                            var propertyData = new Dictionary<string, object>();
-                            for (int propertyIndex = 0; propertyIndex < timeSeriesInsightsResult.QueryResultPages[queryResultIndex].Properties.Count(); propertyIndex++)
-                            {
-                                string propertyName = timeSeriesInsightsResult.QueryResultPages[queryResultIndex].Properties[propertyIndex].Name;
-                                object propertyValue = timeSeriesInsightsResult.QueryResultPages[queryResultIndex].Properties[propertyIndex].Values[timestampIndex];
-
-                                if (propertyValue != null || !ignoreNull)
-                                    propertyData.Add(propertyName, propertyValue);
-                            }
-
-                            if (propertyData.Count() > 0)
-                                timestampData.Add(timestamp, propertyData);
-                        }
-                    }
-
-                    sensorData.Add(timeSeriesInsightsResult.TimeSeriesId, timestampData);
-                    dataGroup.Add(timeSeriesInsightsResult.TimeSeriesId, sensorData);
+                    continuationToken = queryResponse.ContinuationToken;
                 }
+                while (continuationToken != null);
 
-                var dataArray = new List<Dictionary<string, Dictionary<string, Dictionary<string, Dictionary<string, object>>>>>() { dataGroup };
-
-                return dataArray;
+                return queryResultPages;
             }
             catch (Exception e)
             {
                 this._logger.LogError(e.ToString());
+                throw e;
+            }
+        }
+
+        /// <summary>
+        /// Get aggregate series data from TSI
+        /// </summary>
+        /// <param name="aggregateSeries"></param>
+        /// <returns></returns>
+        public async Task<List<QueryResultPage>> GetAggregateSeriesAsync(AggregateSeries aggregateSeries)
+        {
+            try
+            {
+                List<QueryResultPage> queryResultPages = new List<QueryResultPage>() { };
+                QueryRequest queryRequest = new QueryRequest(aggregateSeries: aggregateSeries);
+
+                string continuationToken;
+                do
+                {
+                    QueryResultPage queryResponse = await this.Client.Query.ExecuteAsync(queryRequest);
+                    queryResultPages.Add(queryResponse);
+
+                    continuationToken = queryResponse.ContinuationToken;
+                }
+                while (continuationToken != null);
+
+                return queryResultPages;
+            }
+            catch (Exception e)
+            {
+                throw e;
+            }
+        }
+
+        /// <summary>
+        /// Get aggregate series data from TSI
+        /// </summary>
+        /// <param name="sensorType"></param>
+        /// <param name="sensorCount"></param>
+        /// <param name="searchSpan"></param>
+        /// <param name="interval"></param>
+        /// <returns></returns>
+        public async Task<List<QueryResultPage>> GetAggregateSeriesAsync(string[] timeSeriesIds, DateTimeRange searchSpan, TimeSpan interval, EventProperty eventProperty)
+        {
+            try
+            {
+                var queryResultPages = new List<QueryResultPage>();
+                
+                foreach (var timeSeriesId in timeSeriesIds)
+                {
+                    var aggregateSeriesRequest = GetAggregateSeriesRequest(timeSeriesId, searchSpan, interval, eventProperty);
+                    var queryResult = await GetAggregateSeriesAsync(aggregateSeriesRequest);
+
+                    queryResultPages.AddRange(queryResult);
+                }
+
+                return queryResultPages;
+            }
+            catch (Exception e)
+            {
                 throw e;
             }
         }

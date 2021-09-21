@@ -7,9 +7,6 @@
         <script src="https://unpkg.com/tsiclient@latest/tsiclient.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/bluebird/3.3.4/bluebird.min.js"></script>
         <link rel="stylesheet" type="text/css" href="https://unpkg.com/tsiclient@latest/tsiclient.css" />
-        
-        <!-- boilerplate headers are injected with head.js, grab them from the live example header, or include a link to head.js -->
-        <script src="~/boilerplate/head.js"></script>
     </head>
     <body style="font-family: 'Segoe UI', sans-serif;">
         <div id="chart1" style="width: 100%; height: 600px;"></div>
@@ -21,10 +18,29 @@
                 jsonString = jsonString.replace(/&quot;/g, '\"');
                 var data = JSON.parse(jsonString);
 
-                // render the data in a chart
                 var tsiClient = new TsiClient();
+
+                var tsqExpressions = [];
+                for (var timeSeriesId of @ViewData["TimeSeriesId"]) {
+                    tsqExpressions.push(
+                        new tsiClient.ux.TsqExpression(
+                            {timeSeriesId: [timeSeriesId]},
+                            {@ViewData["VariableName"]: {
+                                kind: '@ViewData["VariableType"]',
+                                value: {tsx: '@ViewData["VariableValue"]'},
+                                filter: null,
+                                aggregation: {tsx: '@ViewData["VariableAggregation"]'}
+                            }},
+                            {from: new Date(@ViewData["From"]), to: new Date(@ViewData["To"]), bucketSize: '@ViewData["BucketSize"]'},
+                            {color: '#60B9AE', alias: '@ViewData["VariableName"]'}
+                        ));
+                }
+                
+
+                var transformedData = tsiClient.ux.transformTsqResultsForVisualization(data, tsqExpressions);
+
                 var lineChart = new tsiClient.ux.LineChart(document.getElementById('chart1'));
-                lineChart.render(data, {theme: 'light', interpolationFunction: 'curveLinear'});
+                lineChart.render(transformedData, {theme: 'dark', interpolationFunction: 'curveLinear'}, tsqExpressions);
             };
         </script>
     </body>
