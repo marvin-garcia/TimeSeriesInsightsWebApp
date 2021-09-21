@@ -18,9 +18,9 @@ namespace TsiWebApp.Models
     {
         Task InitializeAsync();
         GetEvents GetEventsRequest(string timeSeriesId, DateTimeRange searchSpan, EventProperty eventProperty, bool ignoreNull = true);
-        AggregateSeries GetAggregateSeriesRequest(string timeSeriesId, DateTimeRange searchSpan, TimeSpan interval, EventProperty eventProperty, bool ignoreNull = true);
         Task<List<QueryResultPage>> GetEventsAsync(GetEvents getEventsRequest);
-        Task<List<QueryResultPage>> GetAggregateSeriesAsync(AggregateSeries aggregateSeries);
+        //AggregateSeries GetAggregateSeriesRequest(string timeSeriesId, DateTimeRange searchSpan, TimeSpan interval, EventProperty eventProperty);
+        //Task<List<QueryResultPage>> GetAggregateSeriesAsync(AggregateSeries aggregateSeries);
         Task<List<QueryResultPage>> GetAggregateSeriesAsync(string[] timeSeriesIds, DateTimeRange searchSpan, TimeSpan interval, EventProperty eventProperty);
     }
 
@@ -39,10 +39,23 @@ namespace TsiWebApp.Models
         /// <summary>
         /// Determines how to plot different data streams
         /// </summary>
-        public enum DataFormat
+        public enum YAxisState
         {
-            Overlapped,
-            Separate,
+            shared,
+            stacked,
+            overlap,
+        }
+
+        /// <summary>
+        /// Enum to categorize available sensor types
+        /// </summary>
+        public enum SensorType
+        {
+            hvac,
+            lighting,
+            temp,
+            occupancy,
+            RandomSignedInt32,
         }
 
         /// <summary>
@@ -88,26 +101,16 @@ namespace TsiWebApp.Models
         }
 
         /// <summary>
-        /// Enum to categorize available sensor types
-        /// </summary>
-        public enum SensorType
-        {
-            hvac,
-            lighting,
-            temp,
-            occupancy,
-        }
-
-        /// <summary>
         /// Get sensor array
         /// </summary>
         /// <param name="sensorType"></param>
         /// <param name="sensorIndexStart"></param>
         /// <param name="sensorCount"></param>
         /// <returns></returns>
-        public static string[] GetSensorArray(SensorType sensorType, int sensorIndexStart = 1, int sensorCount = 4)
+        public static string[] GetTimeSeriesIdArray(SensorType sensorType, int sensorIndexStart = 1, int sensorCount = 3)
         {
-            string[] sensorArray = Enumerable.Range(sensorIndexStart, sensorCount).Select(x => { return $"{sensorType}sensor{x}"; }).ToArray();
+            //string[] sensorArray = Enumerable.Range(sensorIndexStart, sensorCount).Select(x => { return $"{sensorType}sensor{x}"; }).ToArray();
+            string[] sensorArray = Enumerable.Range(sensorIndexStart, sensorCount).Select(x => { return $"urn:OpcPlc:plc-{x}"; }).ToArray();
             return sensorArray;
         }
 
@@ -120,6 +123,7 @@ namespace TsiWebApp.Models
         {
             try
             {
+                since = since.ToLower();
                 DateTime to = DateTime.UtcNow;
                 DateTime from = to;
                 Match match = Regex.Match(since, @"((\d+?)h)?((\d+?)m)?((\d+?)s)?");
@@ -156,7 +160,8 @@ namespace TsiWebApp.Models
         {
             try
             {
-                Match match = Regex.Match(interval.ToUpper(), @"PT(\d+)([DHMS])");
+                interval = interval.ToLower();
+                Match match = Regex.Match(interval, @"pt(\d+)([dhms])");
 
                 int intervalFactor = match.Groups[2].Value switch
                 {
@@ -192,6 +197,7 @@ namespace TsiWebApp.Models
                     SensorType.lighting => "State",
                     SensorType.temp => "temperature",
                     SensorType.occupancy => "IsOccupied",
+                    SensorType.RandomSignedInt32 => "RandomSignedInt32",
                     _ => throw new Exception($"sensor type '{sensorType}' is not defined"),
                 },
                 sensorType switch
@@ -200,6 +206,7 @@ namespace TsiWebApp.Models
                     SensorType.lighting => "Long",
                     SensorType.temp => "Double",
                     SensorType.occupancy => "Long",
+                    SensorType.RandomSignedInt32 => "Long",
                     _ => throw new Exception($"sensor type '{sensorType}' is not defined"),
                 });
 
@@ -250,49 +257,6 @@ namespace TsiWebApp.Models
         }
 
         /// <summary>
-        /// Creates aggregates series request object based on input parameters
-        /// </summary>
-        /// <param name="sensorType"></param>
-        /// <param name="timeSeriesId"></param>
-        /// <param name="searchSpan"></param>
-        /// <param name="interval"></param>
-        /// <param name="ignoreNull"></param>
-        /// <returns></returns>
-        public AggregateSeries GetAggregateSeriesRequest(string timeSeriesId, DateTimeRange searchSpan, TimeSpan interval, EventProperty eventProperty, bool ignoreNull = true)
-        {
-            try
-            {
-                var timeSeriesIds = new string[]
-                {
-                    timeSeriesId
-                };
-
-                var inlineVariables = new Dictionary<string, Variable>()
-                {
-                    { eventProperty.Name, new Variable(new Tsx($"event.{eventProperty.Name}.{eventProperty.Type}")) }
-                };
-
-                var projectedVariables = new string[] 
-                {
-                    eventProperty.Name
-                };
-
-                Tsx filter = null;
-                if (ignoreNull)
-                    filter = new Tsx($"$event.{eventProperty.Name}.{eventProperty.Type} != null");
-
-                var aggregateSeries = new AggregateSeries(timeSeriesIds, searchSpan, interval, filter, projectedVariables, inlineVariables);
-
-                return aggregateSeries;
-            }
-            catch (Exception e)
-            {
-                this._logger.LogError(e.ToString());
-                throw e;
-            }
-        }
-
-        /// <summary>
         /// Gets raw event data from TSI
         /// </summary>
         /// <param name="request"></param>
@@ -324,11 +288,50 @@ namespace TsiWebApp.Models
         }
 
         /// <summary>
+        /// Creates aggregates series request object based on input parameters
+        /// </summary>
+        /// <param name="sensorType"></param>
+        /// <param name="timeSeriesId"></param>
+        /// <param name="searchSpan"></param>
+        /// <param name="interval"></param>
+        /// <param name="ignoreNull"></param>
+        /// <returns></returns>
+        private AggregateSeries GetAggregateSeriesRequest(string timeSeriesId, DateTimeRange searchSpan, TimeSpan interval, EventProperty eventProperty)
+        {
+            try
+            {
+                var timeSeriesIds = new string[]
+                {
+                    timeSeriesId
+                };
+
+                var projectedVariables = new string[]
+                {
+                    eventProperty.Name
+                };
+
+                var aggregateSeries = new AggregateSeries(
+                    timeSeriesIds, 
+                    searchSpan: searchSpan, 
+                    interval: interval, 
+                    projectedVariables: projectedVariables
+                );
+
+                return aggregateSeries;
+            }
+            catch (Exception e)
+            {
+                this._logger.LogError(e.ToString());
+                throw e;
+            }
+        }
+
+        /// <summary>
         /// Get aggregate series data from TSI
         /// </summary>
         /// <param name="aggregateSeries"></param>
         /// <returns></returns>
-        public async Task<List<QueryResultPage>> GetAggregateSeriesAsync(AggregateSeries aggregateSeries)
+        private async Task<List<QueryResultPage>> GetAggregateSeriesAsync(AggregateSeries aggregateSeries)
         {
             try
             {

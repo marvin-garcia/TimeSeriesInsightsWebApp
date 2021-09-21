@@ -21,6 +21,9 @@ namespace TsiWebApp.Controllers
         public IActionResult Index()
         {
             ViewData["BaseUrl"] = $"{this.Request.Scheme}://{this.Request.Host}{this.Request.PathBase}";
+            ViewData["SensorTypes"] = string.Join(", ", Enum.GetNames(typeof(TimeSeriesInsightsClient.SensorType)));
+            ViewData["YAxis"] = string.Join(", ", Enum.GetNames(typeof(TimeSeriesInsightsClient.YAxisState)));
+
             return View();
         }
 

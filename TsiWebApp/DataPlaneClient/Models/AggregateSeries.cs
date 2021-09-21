@@ -61,7 +61,7 @@ namespace Microsoft.Azure.TimeSeriesInsights.Models
         /// model. When the inline variable names have the same name as the
         /// model, the inline variable definition takes precedence. Can be
         /// null.</param>
-        public AggregateSeries(IList<object> timeSeriesId, DateTimeRange searchSpan, System.TimeSpan interval, Tsx filter = default(Tsx), IList<string> projectedVariables = default(IList<string>), IDictionary<string, Variable> inlineVariables = default(IDictionary<string, Variable>))
+        public AggregateSeries(IList<object> timeSeriesId, DateTimeRange searchSpan, System.TimeSpan interval, Tsx filter = default(Tsx), IList<string> projectedVariables = default(IList<string>), IDictionary<string, InlineVariable> inlineVariables = default(IDictionary<string, InlineVariable>))
         {
             TimeSeriesId = timeSeriesId;
             SearchSpan = searchSpan;
@@ -131,7 +131,7 @@ namespace Microsoft.Azure.TimeSeriesInsights.Models
         /// inline variable definition takes precedence. Can be null.
         /// </summary>
         [JsonProperty(PropertyName = "inlineVariables")]
-        public IDictionary<string, Variable> InlineVariables { get; set; }
+        public IDictionary<string, InlineVariable> InlineVariables { get; set; }
 
         /// <summary>
         /// Validate the object.

@@ -19,7 +19,7 @@ namespace TsiWebApp.Controllers
         public TimeSeriesDataController(ITimeSeriesInsightsClient timeSeriesInsightsClient, ILogger<TimeSeriesDataController> logger) 
         {
             this._logger = logger;
-            this._sensorCount = 4;
+            this._sensorCount = 2;
             this._tsiClient = timeSeriesInsightsClient;
         }
 
@@ -32,27 +32,28 @@ namespace TsiWebApp.Controllers
         /// <param name="ignoreNull">Whether to ignore null data points</param>
         /// <returns></returns>
         [HttpGet]
-        public async Task<IActionResult> Index(SensorType sensorType, string since, string interval)
+        public async Task<IActionResult> Index(SensorType sensorType, string since, string interval, YAxisState yAxis = YAxisState.overlap)
         {
             try
             {
                 await this._tsiClient.InitializeAsync();
-                var timeSeriesIds = TimeSeriesInsightsClient.GetSensorArray(sensorType, 1, _sensorCount);
+                var timeSeriesIds = TimeSeriesInsightsClient.GetTimeSeriesIdArray(sensorType, 1, _sensorCount);
                 var eventProperty = TimeSeriesInsightsClient.GetEventProperty(sensorType);
                 var searchSpan = TimeSeriesInsightsClient.GetTimeRange(since);
                 var timeInterval = TimeSeriesInsightsClient.GetTimeInterval(interval);
-                var aggregateSeries = this._tsiClient.GetAggregateSeriesAsync(timeSeriesIds, searchSpan, timeInterval, eventProperty);
+                var aggregateSeries = await this._tsiClient.GetAggregateSeriesAsync(timeSeriesIds, searchSpan, timeInterval, eventProperty);
                 string serializedData = JsonConvert.SerializeObject(aggregateSeries);
 
-                ViewData["TimeSeriesId"] = JsonConvert.SerializeObject(timeSeriesIds);
+                ViewData["TimeSeriesIds"] = JsonConvert.SerializeObject(timeSeriesIds);
                 ViewData["Data"] = serializedData;
-                ViewData["From"] = searchSpan.FromProperty.ToString("yyyy-MM-ddThh:mm:ss.fffZ");
-                ViewData["To"] = searchSpan.To.ToString("yyyy-MM-ddThh:mm:ss.fffZ");
-                ViewData["BucketSize"] = interval;
+                ViewData["From"] = searchSpan.FromProperty.ToString("yyyy-MM-ddTHH:mm:00.000Z");
+                ViewData["To"] = searchSpan.To.ToString("yyyy-MM-ddTHH:mm:00.000Z");
+                ViewData["BucketSize"] = $"{timeInterval.TotalSeconds}s";
                 ViewData["VariableType"] = "numeric";
                 ViewData["VariableName"] = eventProperty.Name;
                 ViewData["VariableValue"] = $"$event.{eventProperty.Name}.{eventProperty.Type}";
                 ViewData["VariableAggregation"] = "avg($value)";
+                ViewData["yAxisState"] = yAxis.ToString();
 
                 return View();
             }
@@ -62,18 +63,6 @@ namespace TsiWebApp.Controllers
                 this._logger.LogError(e.ToString());
                 return View("Error");
             }
-        }
-
-        /// <summary>
-        /// List available sensor types
-        /// </summary>
-        /// <returns></returns>
-        [HttpGet]
-        public IActionResult GetSensorTypes()
-        {
-            string[] sensorTypes = Enum.GetValues(typeof(SensorType)).Cast<string>().ToArray();
-
-            return new OkObjectResult(sensorTypes);
         }
     }
 }

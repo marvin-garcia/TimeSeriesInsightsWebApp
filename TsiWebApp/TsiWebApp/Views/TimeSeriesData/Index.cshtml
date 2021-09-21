@@ -18,29 +18,37 @@
                 jsonString = jsonString.replace(/&quot;/g, '\"');
                 var data = JSON.parse(jsonString);
 
+                jsonString = '@ViewData["TimeSeriesIds"]';
+                jsonString = jsonString.replace(/&quot;/g, '\"');
+                var timeSeriesIds = JSON.parse(jsonString);
+
                 var tsiClient = new TsiClient();
 
                 var tsqExpressions = [];
-                for (var timeSeriesId of @ViewData["TimeSeriesId"]) {
+                var colors = ['#0078D7', '#E0349E', '#60B9AE', '#854CC7', '#FFF100', '#258225', '#FF2828'];
+                timeSeriesIds.forEach((timeSeriesId, i) => {
                     tsqExpressions.push(
                         new tsiClient.ux.TsqExpression(
                             {timeSeriesId: [timeSeriesId]},
                             {@ViewData["VariableName"]: {
                                 kind: '@ViewData["VariableType"]',
                                 value: {tsx: '@ViewData["VariableValue"]'},
-                                filter: null,
                                 aggregation: {tsx: '@ViewData["VariableAggregation"]'}
                             }},
-                            {from: new Date(@ViewData["From"]), to: new Date(@ViewData["To"]), bucketSize: '@ViewData["BucketSize"]'},
-                            {color: '#60B9AE', alias: '@ViewData["VariableName"]'}
-                        ));
-                }
-                
+                            {from: new Date('@ViewData["From"]'), to: new Date('@ViewData["To"]'), bucketSize: '@ViewData["BucketSize"]'},
+                            {color: colors[i], alias: timeSeriesId}));
+                });
 
                 var transformedData = tsiClient.ux.transformTsqResultsForVisualization(data, tsqExpressions);
 
                 var lineChart = new tsiClient.ux.LineChart(document.getElementById('chart1'));
-                lineChart.render(transformedData, {theme: 'dark', interpolationFunction: 'curveLinear'}, tsqExpressions);
+                var lineChartOptions = {
+                    theme: 'dark',
+                    legend: 'shown',
+                    yAxisState: '@ViewData["yAxisState"]',
+                    interpolationFunction: 'curveLinear'
+                };
+                lineChart.render(transformedData, lineChartOptions, tsqExpressions);
             };
         </script>
     </body>
