@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Microsoft.AspNetCore.Mvc;
@@ -6,7 +7,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using TsiWebApp.Models;
 using static TsiWebApp.Models.TimeSeriesInsightsClient;
-using System.Linq;
 
 namespace TsiWebApp.Controllers
 {
