@@ -36,7 +36,7 @@ namespace Microsoft.Azure.TimeSeriesInsights.Models
         /// <param name="filter">Filter over the events that restricts the
         /// number of events being considered for computation. Example:
         /// "$event.Status.String='Good'". Optional.</param>
-        public InlineVariable(Tsx value, Tsx aggregation, string kind = "numeric", Tsx filter = default(Tsx))
+        public InlineVariable(string kind, Tsx value, Tsx aggregation, Tsx filter = default(Tsx))
         {
             Kind = kind;
             Value = value;

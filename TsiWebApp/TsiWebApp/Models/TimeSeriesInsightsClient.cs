@@ -55,7 +55,6 @@ namespace TsiWebApp.Models
             lighting,
             temp,
             occupancy,
-            RandomSignedInt32,
         }
 
         /// <summary>
@@ -109,8 +108,7 @@ namespace TsiWebApp.Models
         /// <returns></returns>
         public static string[] GetTimeSeriesIdArray(SensorType sensorType, int sensorIndexStart = 1, int sensorCount = 3)
         {
-            //string[] sensorArray = Enumerable.Range(sensorIndexStart, sensorCount).Select(x => { return $"{sensorType}sensor{x}"; }).ToArray();
-            string[] sensorArray = Enumerable.Range(sensorIndexStart, sensorCount).Select(x => { return $"urn:OpcPlc:plc-{x}"; }).ToArray();
+            string[] sensorArray = Enumerable.Range(sensorIndexStart, sensorCount).Select(x => { return $"{sensorType}sensor{x}"; }).ToArray();
             return sensorArray;
         }
 
@@ -197,7 +195,6 @@ namespace TsiWebApp.Models
                     SensorType.lighting => "State",
                     SensorType.temp => "temperature",
                     SensorType.occupancy => "IsOccupied",
-                    SensorType.RandomSignedInt32 => "RandomSignedInt32",
                     _ => throw new Exception($"sensor type '{sensorType}' is not defined"),
                 },
                 sensorType switch
@@ -206,7 +203,6 @@ namespace TsiWebApp.Models
                     SensorType.lighting => "Long",
                     SensorType.temp => "Double",
                     SensorType.occupancy => "Long",
-                    SensorType.RandomSignedInt32 => "Long",
                     _ => throw new Exception($"sensor type '{sensorType}' is not defined"),
                 });
 
@@ -300,22 +296,23 @@ namespace TsiWebApp.Models
         {
             try
             {
-                var timeSeriesIds = new string[]
-                {
-                    timeSeriesId
-                };
+                var timeSeriesIds = new string[] { timeSeriesId };
 
-                var projectedVariables = new string[]
-                {
-                    eventProperty.Name
-                };
+                var inlineVariable = new InlineVariable(
+                    "numeric",
+                    new Tsx($"$event.{eventProperty.Name}.{eventProperty.Type}"),
+                    new Tsx("avg($value)"));
+
+                var inlineVariables = new Dictionary<string, InlineVariable>() { { eventProperty.Name, inlineVariable } };
+
+                var projectedVariables = new string[] { eventProperty.Name };
 
                 var aggregateSeries = new AggregateSeries(
                     timeSeriesIds, 
                     searchSpan: searchSpan, 
-                    interval: interval, 
-                    projectedVariables: projectedVariables
-                );
+                    interval: interval,
+                    inlineVariables: inlineVariables,
+                    projectedVariables: projectedVariables);
 
                 return aggregateSeries;
             }

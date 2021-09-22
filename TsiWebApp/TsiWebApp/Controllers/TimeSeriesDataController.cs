@@ -16,10 +16,10 @@ namespace TsiWebApp.Controllers
         private readonly ITimeSeriesInsightsClient _tsiClient;
         private readonly ILogger<TimeSeriesDataController> _logger;
 
-        public TimeSeriesDataController(ITimeSeriesInsightsClient timeSeriesInsightsClient, ILogger<TimeSeriesDataController> logger) 
+        public TimeSeriesDataController(IConfiguration configuration, ITimeSeriesInsightsClient timeSeriesInsightsClient, ILogger<TimeSeriesDataController> logger) 
         {
             this._logger = logger;
-            this._sensorCount = 2;
+            this._sensorCount = Convert.ToInt32(configuration["SENSOR_COUNT"]);
             this._tsiClient = timeSeriesInsightsClient;
         }
 
@@ -32,7 +32,7 @@ namespace TsiWebApp.Controllers
         /// <param name="ignoreNull">Whether to ignore null data points</param>
         /// <returns></returns>
         [HttpGet]
-        public async Task<IActionResult> Index(SensorType sensorType, string since, string interval, YAxisState yAxis = YAxisState.shared)
+        public async Task<IActionResult> Index(SensorType sensorType, string since = "60m", string interval = "pt5m", YAxisState yAxis = YAxisState.stacked)
         {
             try
             {
