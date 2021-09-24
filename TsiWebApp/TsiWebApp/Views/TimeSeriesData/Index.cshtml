@@ -2,7 +2,7 @@
 <!DOCTYPE html> 
 <html>
 <head>
-    <title>Tims Series Insights</title>
+    <title>Time Series Insights</title>
 
     <script src="https://unpkg.com/tsiclient@latest/tsiclient.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bluebird/3.3.4/bluebird.min.js"></script>
@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="~/css/site.css" />
 </head>
     <body style="font-family: 'Segoe UI', sans-serif;">
-        <div class="container-fluid chart-container" id="chart1"></div>
+        <div id="chart1" class="container" style="width: @ViewData["Width"]; height: @ViewData["Height"];"></div>
         
         <script>
             window.onload = function() {
@@ -45,8 +45,8 @@
 
                 var lineChart = new tsiClient.ux.LineChart(document.getElementById('chart1'));
                 var lineChartOptions = {
-                    theme: 'dark',
-                    legend: 'compact',
+                    theme: '@ViewData["Theme"]',
+                    legend: '@ViewData["Legend"]',
                     yAxisState: '@ViewData["yAxisState"]',
                     interpolationFunction: ''
                 };

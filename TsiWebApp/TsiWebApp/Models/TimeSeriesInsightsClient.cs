@@ -37,7 +37,7 @@ namespace TsiWebApp.Models
         private Microsoft.Azure.TimeSeriesInsights.TimeSeriesInsightsClient Client { get; set; }
 
         /// <summary>
-        /// Determines how to plot different data streams
+        /// Available options to render Y axis data
         /// </summary>
         public enum YAxisState
         {
@@ -47,7 +47,7 @@ namespace TsiWebApp.Models
         }
 
         /// <summary>
-        /// Enum to categorize available sensor types
+        /// Available sensor types
         /// </summary>
         public enum SensorType
         {
@@ -55,6 +55,25 @@ namespace TsiWebApp.Models
             lighting,
             temp,
             occupancy,
+        }
+
+        /// <summary>
+        /// Legend options to use in the chart
+        /// </summary>
+        public enum Legend
+        {
+            shown,
+            hidden,
+            compact,
+        }
+
+        /// <summary>
+        /// Theme options to use in the chart
+        /// </summary>
+        public enum Theme
+        {
+            dark,
+            light,
         }
 
         /// <summary>

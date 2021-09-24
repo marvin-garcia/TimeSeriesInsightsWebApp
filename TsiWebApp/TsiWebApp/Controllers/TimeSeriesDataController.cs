@@ -32,7 +32,15 @@ namespace TsiWebApp.Controllers
         /// <param name="ignoreNull">Whether to ignore null data points</param>
         /// <returns></returns>
         [HttpGet]
-        public async Task<IActionResult> Index(SensorType sensorType, string since = "60m", string interval = "pt5m", YAxisState yAxis = YAxisState.stacked)
+        public async Task<IActionResult> Index(
+            SensorType sensorType,
+            string since = "60m",
+            string interval = "pt3m",
+            YAxisState yAxis = YAxisState.stacked,
+            Theme theme = Theme.dark,
+            Legend legend = Legend.hidden,
+            int width = 350,
+            int height = 205)
         {
             try
             {
@@ -54,6 +62,10 @@ namespace TsiWebApp.Controllers
                 ViewData["VariableValue"] = $"$event.{eventProperty.Name}.{eventProperty.Type}";
                 ViewData["VariableAggregation"] = "avg($value)";
                 ViewData["yAxisState"] = yAxis.ToString();
+                ViewData["Theme"] = theme.ToString();
+                ViewData["Legend"] = legend.ToString();
+                ViewData["Width"] = $"{width}px";
+                ViewData["Height"] = $"{height}px";
 
                 return View();
             }

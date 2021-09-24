@@ -390,3 +390,7 @@ FodyWeavers.xsd
 **/appsettings.json
 **/appsettings.Development.json
 /TsiWebApp/TsiWebApp/.config/dotnet-tools.json
+/TsiWebApp/TsiWebApp/Properties/serviceDependencies.tsiwebapp - Web Deploy.json
+/ADTLink_TSITest-220921/ADTLink_TSI_Test
+/TsiWebApp/TsiWebApp/Properties/ServiceDependencies/tsiwebapp - Web Deploy
+
